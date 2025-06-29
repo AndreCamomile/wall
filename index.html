@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wall</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #f5f5f5;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #viewport {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            cursor: grab;
+            background-color: #e0e0e0;
+        }
+
+        #viewport.dragging {
+            cursor: grabbing;
+        }
+
+        #canvas {
+            position: absolute;
+            transform-origin: 0 0;
+            transition: transform 0.2s ease-out;
+            min-width: 2000px;
+            min-height: 2000px;
+            background-color: #f8f8f8;
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-btn {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.1);
+        }
+
+        .info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-size: 12px;
+            color: #666;
+        }
+
+        .add-button {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: #4CAF50;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+            z-index: 100;
+        }
+
+        .add-button:hover {
+            background: #45a049;
+            transform: scale(1.1);
+        }
+
+        .content-menu {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            padding: 8px;
+            display: none;
+            z-index: 200;
+            min-width: 150px;
+        }
+
+        .menu-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .menu-item:hover {
+            background: #f0f0f0;
+        }
+
+        .media-element {
+            position: absolute;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .media-element img {
+            max-width: 200px;
+            max-height: 200px;
+            display: block;
+        }
+
+        .media-element audio {
+            width: 200px;
+        }
+
+        .media-element .delete-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 24px;
+            height: 24px;
+            background: #ff4444;
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewport">
+        <div id="canvas"></div>
+    </div>
+
+    <div class="controls">
+        <div class="control-btn" onclick="zoomIn()">+</div>
+        <div class="control-btn" onclick="zoomOut()">-</div>
+        <div class="control-btn" onclick="resetView()" title="Скинути вид">⌂</div>
+    </div>
+
+    <div class="info">
+        <div>Масштаб: <span id="zoomLevel">100%</span></div>
+        <div>Перетягуйте для переміщення</div>
+        <div>Колесо миші для масштабування</div>
+        <div>Тисніть для додавання контенту</div>
+        <div>Підключено: <span id="connectionStatus">з'єднання...</span></div>
+        <div>Онлайн: <span id="userCount">0</span> користувачів</div>
+    </div>
+
+    <div id="contentMenu" class="content-menu">
+        <div class="menu-item" onclick="selectFile('image')">
+            📷 Додати фото
+        </div>
+        <div class="menu-item" onclick="selectFile('audio')">
+            🎵 Додати аудіо
+        </div>
+        <div class="menu-item" onclick="takePhoto()">
+            📸 Сфотографувати
+        </div>
+    </div>
+
+    <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'image')">
+    <input type="file" id="audioInput" accept="audio/*" class="hidden" onchange="handleFileSelect(event, 'audio')">
+    <video id="cameraPreview" class="hidden" autoplay></video>
+    <canvas id="photoCanvas" class="hidden"></canvas>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        class InteractiveMap {
+            constructor() {
+                this.viewport = document.getElementById('viewport');
+                this.canvas = document.getElementById('canvas');
+                this.zoomLevelDisplay = document.getElementById('zoomLevel');
+                this.contentMenu = document.getElementById('contentMenu');
+                this.connectionStatus = document.getElementById('connectionStatus');
+                this.userCount = document.getElementById('userCount');
+                
+                this.scale = 1;
+                this.minScale = 0.1;
+                this.maxScale = 5;
+                this.translateX = 0;
+                this.translateY = 0;
+                
+                this.isDragging = false;
+                this.startX = 0;
+                this.startY = 0;
+                this.lastTranslateX = 0;
+                this.lastTranslateY = 0;
+
+                this.currentAddButton = null;
+                this.pendingPosition = { x: 0, y: 0 };
+                this.mediaElements = new Map();
+                this.connectedUsers = new Set();
+
+                this.initSocket();
+                this.initEvents();
+                this.centerView();
+            }
+
+            initSocket() {
+                this.socket = io();
+                
+                this.socket.on('connect', () => {
+                    this.connectionStatus.textContent = 'підключено';
+                    this.connectionStatus.style.color = '#4CAF50';
+                });
+
+                this.socket.on('disconnect', () => {
+                    this.connectionStatus.textContent = 'відключено';
+                    this.connectionStatus.style.color = '#f44336';
+                });
+
+                this.socket.on('wall-data', (data) => {
+                    this.loadWallData(data);
+                });
+
+                this.socket.on('element-added', (element) => {
+                    this.addMediaElementFromServer(element);
+                });
+
+                this.socket.on('element-deleted', (data) => {
+                    this.removeMediaElement(data.id);
+                });
+
+                this.socket.on('user-connected', (data) => {
+                    this.connectedUsers.add(data.id);
+                    this.updateUserCount();
+                });
+
+                this.socket.on('user-disconnected', (data) => {
+                    this.connectedUsers.delete(data.id);
+                    this.updateUserCount();
+                });
+            }
+
+            loadWallData(data) {
+                // Очистити поточні елементи
+                this.mediaElements.forEach((element) => {
+                    element.remove();
+                });
+                this.mediaElements.clear();
+
+                // Завантажити елементи з сервера
+                data.elements.forEach(elementData => {
+                    this.addMediaElementFromServer(elementData);
+                });
+            }
+
+            updateUserCount() {
+                this.userCount.textContent = this.connectedUsers.size + 1; // +1 для поточного користувача
+            }
+
+            initEvents() {
+                // Mouse events
+                this.viewport.addEventListener('mousedown', this.onMouseDown.bind(this));
+                this.viewport.addEventListener('mousemove', this.onMouseMove.bind(this));
+                this.viewport.addEventListener('mouseup', this.onMouseUp.bind(this));
+                this.viewport.addEventListener('wheel', this.onWheel.bind(this));
+                this.viewport.addEventListener('click', this.onCanvasClick.bind(this));
+
+                // Touch events
+                this.viewport.addEventListener('touchstart', this.onTouchStart.bind(this));
+                this.viewport.addEventListener('touchmove', this.onTouchMove.bind(this));
+                this.viewport.addEventListener('touchend', this.onTouchEnd.bind(this));
+
+                // Close menu when clicking outside
+                document.addEventListener('click', this.closeMenuOutside.bind(this));
+
+                // Prevent context menu
+                this.viewport.addEventListener('contextmenu', e => e.preventDefault());
+            }
+
+            onMouseDown(e) {
+                if (e.target.closest('.add-button') || e.target.closest('.content-menu')) {
+                    return;
+                }
+                
+                this.isDragging = true;
+                this.viewport.classList.add('dragging');
+                this.startX = e.clientX - this.translateX;
+                this.startY = e.clientY - this.translateY;
+                this.hideAddButton();
+            }
+
+            onMouseMove(e) {
+                if (!this.isDragging) return;
+                e.preventDefault();
+                this.translateX = e.clientX - this.startX;
+                this.translateY = e.clientY - this.startY;
+                this.updateTransform();
+            }
+
+            onMouseUp() {
+                this.isDragging = false;
+                this.viewport.classList.remove('dragging');
+                this.lastTranslateX = this.translateX;
+                this.lastTranslateY = this.translateY;
+            }
+
+            onCanvasClick(e) {
+                if (this.isDragging || e.target.closest('.add-button') || 
+                    e.target.closest('.content-menu') || e.target.closest('.media-element')) {
+                    return;
+                }
+
+                // Calculate position relative to canvas
+                const rect = this.viewport.getBoundingClientRect();
+                const x = (e.clientX - rect.left - this.translateX) / this.scale;
+                const y = (e.clientY - rect.top - this.translateY) / this.scale;
+
+                this.showAddButton(x, y);
+            }
+
+            showAddButton(x, y) {
+                this.hideAddButton();
+                
+                const button = document.createElement('div');
+                button.className = 'add-button';
+                button.innerHTML = '+';
+                button.style.left = x + 'px';
+                button.style.top = y + 'px';
+                
+                button.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.pendingPosition = { x, y };
+                    this.showContentMenu(e.pageX, e.pageY);
+                });
+
+                this.canvas.appendChild(button);
+                this.currentAddButton = button;
+            }
+
+            hideAddButton() {
+                if (this.currentAddButton) {
+                    this.currentAddButton.remove();
+                    this.currentAddButton = null;
+                }
+            }
+
+            showContentMenu(x, y) {
+                this.contentMenu.style.left = x + 'px';
+                this.contentMenu.style.top = y + 'px';
+                this.contentMenu.style.display = 'block';
+            }
+
+            hideContentMenu() {
+                this.contentMenu.style.display = 'none';
+            }
+
+            closeMenuOutside(e) {
+                if (!e.target.closest('.content-menu') && !e.target.closest('.add-button')) {
+                    this.hideContentMenu();
+                }
+            }
+
+            addMediaElementFromServer(elementData) {
+                const element = document.createElement('div');
+                element.className = 'media-element';
+                element.style.left = elementData.x + 'px';
+                element.style.top = elementData.y + 'px';
+                element.dataset.id = elementData.id;
+
+                let mediaHtml = '';
+                if (elementData.type === 'image') {
+                    mediaHtml = `<img src="${elementData.src}" alt="Media">`;
+                } else if (elementData.type === 'audio') {
+                    mediaHtml = `<audio controls src="${elementData.src}"></audio>`;
+                }
+
+                element.innerHTML = `
+                    ${mediaHtml}
+                    <div class="delete-btn" onclick="deleteMediaElement('${elementData.id}')">×</div>
+                `;
+
+                this.canvas.appendChild(element);
+                this.mediaElements.set(elementData.id, element);
+            }
+
+            removeMediaElement(id) {
+                const element = this.mediaElements.get(id);
+                if (element) {
+                    element.remove();
+                    this.mediaElements.delete(id);
+                }
+            }
+
+            async deleteMediaElement(id) {
+                try {
+                    const response = await fetch(`/api/element/${id}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Помилка видалення');
+                    }
+                    
+                    // Елемент буде видалено через socket.io event
+                } catch (error) {
+                    console.error('Помилка видалення елемента:', error);
+                    alert('Не вдалося видалити елемент');
+                }
+            }
+
+            onWheel(e) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                const newScale = this.scale * delta;
+                
+                if (newScale >= this.minScale && newScale <= this.maxScale) {
+                    const rect = this.viewport.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    this.translateX = x - (x - this.translateX) * delta;
+                    this.translateY = y - (y - this.translateY) * delta;
+                    this.scale = newScale;
+                    
+                    this.updateTransform();
+                    this.updateZoomDisplay();
+                }
+            }
+
+            onTouchStart(e) {
+                if (e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    this.onMouseDown(touch);
+                }
+            }
+
+            onTouchMove(e) {
+                e.preventDefault();
+                if (e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    this.onMouseMove(touch);
+                }
+            }
+
+            onTouchEnd(e) {
+                this.onMouseUp();
+            }
+
+            updateTransform() {
+                this.canvas.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+            }
+
+            updateZoomDisplay() {
+                this.zoomLevelDisplay.textContent = Math.round(this.scale * 100) + '%';
+            }
+
+            centerView() {
+                const viewportRect = this.viewport.getBoundingClientRect();
+                const canvasRect = this.canvas.getBoundingClientRect();
+                
+                this.translateX = (viewportRect.width - canvasRect.width * this.scale) / 2;
+                this.translateY = (viewportRect.height - canvasRect.height * this.scale) / 2;
+                
+                this.updateTransform();
+                this.updateZoomDisplay();
+            }
+
+            zoomIn() {
+                if (this.scale < this.maxScale) {
+                    this.scale *= 1.2;
+                    this.updateTransform();
+                    this.updateZoomDisplay();
+                }
+            }
+
+            zoomOut() {
+                if (this.scale > this.minScale) {
+                    this.scale *= 0.8;
+                    this.updateTransform();
+                    this.updateZoomDisplay();
+                }
+            }
+
+            reset() {
+                this.scale = 1;
+                this.centerView();
+            }
+        }
+
+        // Initialize the interactive map
+        const map = new InteractiveMap();
+
+        // Global functions for buttons
+        function zoomIn() {
+            map.zoomIn();
+        }
+
+        function zoomOut() {
+            map.zoomOut();
+        }
+
+        function resetView() {
+            map.reset();
+        }
+
+        function selectFile(type) {
+            const input = document.getElementById(type + 'Input');
+            input.click();
+            map.hideContentMenu();
+        }
+
+        async function handleFileSelect(event, type) {
+            const file = event.target.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('x', map.pendingPosition.x);
+                formData.append('y', map.pendingPosition.y);
+                formData.append('type', type);
+
+                try {
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Помилка завантаження файлу');
+                    }
+
+                    const result = await response.json();
+                    console.log('Файл завантажено:', result);
+                    
+                    map.hideAddButton();
+                    map.hideContentMenu();
+                } catch (error) {
+                    console.error('Помилка завантаження:', error);
+                    alert('Не вдалося завантажити файл');
+                }
+            }
+        }
+
+        function takePhoto() {
+            map.hideContentMenu();
+            startCamera();
+        }
+
+        function startCamera() {
+            const video = document.getElementById('cameraPreview');
+            
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    video.style.position = 'fixed';
+                    video.style.top = '50%';
+                    video.style.left = '50%';
+                    video.style.transform = 'translate(-50%, -50%)';
+                    video.style.zIndex = '1000';
+                    video.style.border = '3px solid white';
+                    video.style.borderRadius = '10px';
+                    video.style.width = '300px';
+                    video.style.height = '200px';
+                    video.classList.remove('hidden');
+
+                    // Add capture button
+                    const captureBtn = document.createElement('button');
+                    captureBtn.innerHTML = '📸 Зробити фото';
+                    captureBtn.style.position = 'fixed';
+                    captureBtn.style.top = '60%';
+                    captureBtn.style.left = '50%';
+                    captureBtn.style.transform = 'translateX(-50%)';
+                    captureBtn.style.zIndex = '1001';
+                    captureBtn.style.padding = '10px 20px';
+                    captureBtn.style.background = '#4CAF50';
+                    captureBtn.style.color = 'white';
+                    captureBtn.style.border = 'none';
+                    captureBtn.style.borderRadius = '5px';
+                    captureBtn.style.cursor = 'pointer';
+                    captureBtn.onclick = () => capturePhoto(stream, captureBtn);
+                    
+                    document.body.appendChild(captureBtn);
+
+                    // Add cancel button
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.innerHTML = '❌ Скасувати';
+                    cancelBtn.style.position = 'fixed';
+                    cancelBtn.style.top = '60%';
+                    cancelBtn.style.left = '60%';
+                    cancelBtn.style.transform = 'translateX(-50%)';
+                    cancelBtn.style.zIndex = '1001';
+                    cancelBtn.style.padding = '10px 20px';
+                    cancelBtn.style.background = '#f44336';
+                    cancelBtn.style.color = 'white';
+                    cancelBtn.style.border = 'none';
+                    cancelBtn.style.borderRadius = '5px';
+                    cancelBtn.style.cursor = 'pointer';
+                    cancelBtn.onclick = () => cancelCamera(stream, captureBtn, cancelBtn);
+                    
+                    document.body.appendChild(cancelBtn);
+                })
+                .catch(err => {
+                    alert('Не вдалося отримати доступ до камери: ' + err.message);
+                });
+        }
+
+        async function capturePhoto(stream, captureBtn) {
+            const video = document.getElementById('cameraPreview');
+            const canvas = document.getElementById('photoCanvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            const imageData = canvas.toDataURL('image/png');
+            
+            try {
+                const response = await fetch('/api/capture', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        imageData: imageData,
+                        x: map.pendingPosition.x,
+                        y: map.pendingPosition.y
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Помилка збереження фото');
+                }
+
+                const result = await response.json();
+                console.log('Фото збережено:', result);
+                
+                map.hideAddButton();
+                map.hideContentMenu();
+            } catch (error) {
+                console.error('Помилка збереження фото:', error);
+                alert('Не вдалося зберегти фото');
+            }
+
+            // Stop camera and cleanup
+            stream.getTracks().forEach(track => track.stop());
+            video.classList.add('hidden');
+            captureBtn.remove();
+            document.querySelector('button[onclick*="cancelCamera"]').remove();
+        }
+
+        function cancelCamera(stream, captureBtn, cancelBtn) {
+            const video = document.getElementById('cameraPreview');
+            stream.getTracks().forEach(track => track.stop());
+            video.classList.add('hidden');
+            captureBtn.remove();
+            cancelBtn.remove();
+        }
+
+        function deleteMediaElement(id) {
+            map.deleteMediaElement(id);
+        }
+    </script>
+</body>
+</html> 
